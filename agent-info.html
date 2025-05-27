@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carvana Admin Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #f9fafb;
+      margin: 0;
+      padding: 1rem;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      color: #003366;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      background: white;
+      padding: 1.5rem;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      animation: fadeInUp 0.8s ease forwards;
+    }
+    section {
+      margin-bottom: 2.5rem;
+    }
+    section h2 {
+      border-bottom: 3px solid #0055a5;
+      padding-bottom: 0.25rem;
+      margin-bottom: 1rem;
+      color: #0055a5;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    thead {
+      background: #0055a5;
+      color: white;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #ddd;
+      transition: background 0.3s ease;
+    }
+    tbody tr:hover {
+      background: #f1f8ff;
+    }
+    button.delete-btn {
+      background: #e74c3c;
+      border: none;
+      color: white;
+      padding: 0.4rem 0.7rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      font-weight: 700;
+    }
+    button.delete-btn:hover {
+      background: #c0392b;
+    }
+    input[type="search"] {
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      width: 100%;
+      max-width: 400px;
+      font-size: 1rem;
+      outline-offset: 2px;
+      transition: box-shadow 0.3s ease;
+    }
+    input[type="search"]:focus {
+      box-shadow: 0 0 5px #0055a5;
+      border-color: #0055a5;
+    }
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @media (max-width: 768px) {
+      th, td {
+        padding: 0.5rem 0.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Carvana Admin Dashboard</h1>
+  <div class="container">
+
+    <section id="subscribers-section">
+      <h2>Newsletter Subscribers</h2>
+      <input type="search" id="subscriber-search" placeholder="Search subscribers by email..." />
+      <table id="subscribers-table" aria-label="Newsletter Subscribers">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Subscriber rows inserted here dynamically -->
+        </tbody>
+      </table>
+    </section>
+
+    <section id="help-requests-section">
+      <h2>Help Requests</h2>
+      <input type="search" id="help-search" placeholder="Search help requests by name, email, or message..." />
+      <table id="help-requests-table" aria-label="Help Requests">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Message</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Help request rows inserted here dynamically -->
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      onValue,
+      remove
+    } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyB04Q7-e0nPnhoDt4tBy2T23iWt4p_nLaw",
+      authDomain: "cars-11683.firebaseapp.com",
+      databaseURL: "https://cars-11683-default-rtdb.firebaseio.com",
+      projectId: "cars-11683",
+      storageBucket: "cars-11683.appspot.com",
+      messagingSenderId: "884218610939",
+      appId: "1:884218610939:web:824c4d711bda9a67d15c5e"
+    };
+
+    // Initialize Firebase app and database
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // DOM Elements
+    const subscribersTableBody = document.querySelector("#subscribers-table tbody");
+    const helpRequestsTableBody = document.querySelector("#help-requests-table tbody");
+
+    const subscriberSearchInput = document.getElementById("subscriber-search");
+    const helpSearchInput = document.getElementById("help-search");
+
+    // Utility function to create a table row for subscriber
+    function createSubscriberRow(key, email) {
+      const tr = document.createElement("tr");
+
+      const tdEmail = document.createElement("td");
+      tdEmail.textContent = email;
+      tr.appendChild(tdEmail);
+
+      const tdActions = document.createElement("td");
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Delete";
+      deleteBtn.className = "delete-btn";
+      deleteBtn.onclick = () => deleteSubscriber(key);
+      tdActions.appendChild(deleteBtn);
+
+      tr.appendChild(tdActions);
+      return tr;
+    }
+
+    // Utility function to create a table row for help request
+    function createHelpRequestRow(key, { name, email, message }) {
+      const tr = document.createElement("tr");
+
+      const tdName = document.createElement("td");
+      tdName.textContent = name;
+      tr.appendChild(tdName);
+
+      const tdEmail = document.createElement("td");
+      tdEmail.textContent = email;
+      tr.appendChild(tdEmail);
+
+      const tdMessage = document.createElement("td");
+      tdMessage.textContent = message;
+      tr.appendChild(tdMessage);
+
+      const tdActions = document.createElement("td");
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Delete";
+      deleteBtn.className = "delete-btn";
+      deleteBtn.onclick = () => deleteHelpRequest(key);
+      tdActions.appendChild(deleteBtn);
+
+      tr.appendChild(tdActions);
+      return tr;
+    }
+
+    // Fetch and render subscribers
+    function fetchSubscribers() {
+      const subsRef = ref(db, "subscribers");
+      onValue(subsRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        subscribersTableBody.innerHTML = ""; // Clear table body
+
+        for (const [key, entry] of Object.entries(data)) {
+          const row = createSubscriberRow(key, entry.email);
+          subscribersTableBody.appendChild(row);
+        }
+      });
+    }
+
+    // Fetch and render help requests
+    function fetchHelpRequests() {
+      const helpRef = ref(db, "help_requests");
+      onValue(helpRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        helpRequestsTableBody.innerHTML = ""; // Clear table body
+
+        for (const [key, entry] of Object.entries(data)) {
+          const row = createHelpRequestRow(key, entry);
+          helpRequestsTableBody.appendChild(row);
+        }
+      });
+    }
+
+    // Delete subscriber
+    async function deleteSubscriber(key) {
+      if (confirm("Are you sure you want to delete this subscriber?")) {
+        try {
+          await remove(ref(db, `subscribers/${key}`));
+          alert("Subscriber deleted.");
+        } catch (error) {
+          alert("Error deleting subscriber: " + error.message);
+        }
+      }
+    }
+
+    // Delete help request
+    async function deleteHelpRequest(key) {
+      if (confirm("Are you sure you want to delete this help request?")) {
+        try {
+          await remove(ref(db, `help_requests/${key}`));
+          alert("Help request deleted.");
+        } catch (error) {
+          alert("Error deleting help request: " + error.message);
+        }
+      }
+    }
+
+    // Filter helper function for table rows
+    function filterTableRows(inputElement, tableBody, columns = []) {
+      const filter = inputElement.value.toLowerCase();
+      const rows = Array.from(tableBody.getElementsByTagName("tr"));
+      rows.forEach(row => {
+        const text = columns.length > 0
+          ? columns.map(i => row.cells[i].textContent.toLowerCase()).join(" ")
+          : row.textContent.toLowerCase();
+
+        row.style.display = text.includes(filter) ? "" : "none";
+      });
+    }
+
+    // Add event listeners for search inputs
+    subscriberSearchInput.addEventListener("input", () => {
+      filterTableRows(subscriberSearchInput, subscribersTableBody, [0]);
+    });
+
+    helpSearchInput.addEventListener("input", () => {
+      // Search by name, email, or message (columns 0,1,2)
+      filterTableRows(helpSearchInput, helpRequestsTableBody, [0,1,2]);
+    });
+
+    // Initial fetch on load
+    fetchSubscribers();
+    fetchHelpRequests();
+
+  </script>
+</body>
+</html>
